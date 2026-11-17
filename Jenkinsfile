@@ -1,70 +1,27 @@
 pipeline {
     agent any
 
-    environment {
-        PROJECT_DIR = "/home/ubuntu/TokenTrail"
-    }
-
     stages {
 
-        stage('Verify Environment') {
+        stage('Deploy') {
             steps {
                 sh '''
-                whoami
-                docker --version
-                docker compose version
+                pwd
+                ls -la
+
+                docker compose down --remove-orphans || true
+
+                docker compose up -d --build
+
+                docker ps
                 '''
-            }
-        }
-
-        stage('Update Source') {
-            steps {
-                dir("${PROJECT_DIR}") {
-                    sh '''
-                    git fetch --all
-                    git reset --hard origin/main
-                    git pull origin main
-                    '''
-                }
-            }
-        }
-
-        stage('Stop Existing Containers') {
-            steps {
-                dir("${PROJECT_DIR}") {
-                    sh '''
-                    docker compose down --remove-orphans || true
-                    '''
-                }
-            }
-        }
-
-        stage('Build Images') {
-            steps {
-                dir("${PROJECT_DIR}") {
-                    sh '''
-                    docker compose build --no-cache
-                    '''
-                }
-            }
-        }
-
-        stage('Start Containers') {
-            steps {
-                dir("${PROJECT_DIR}") {
-                    sh '''
-                    docker compose up -d
-                    '''
-                }
             }
         }
 
         stage('Health Check') {
             steps {
                 sh '''
-                sleep 20
-
-                docker ps
+                sleep 15
 
                 curl -f http://localhost:3000 || true
                 curl -f http://localhost:8000/health || true
@@ -74,7 +31,6 @@ pipeline {
     }
 
     post {
-
         success {
             echo 'Deployment Successful'
         }
@@ -84,13 +40,7 @@ pipeline {
 
             sh '''
             docker ps -a
-            docker compose -f /home/ubuntu/TokenTrail/docker-compose.yml logs --tail=100 || true
-            '''
-        }
-
-        always {
-            sh '''
-            docker image prune -f || true
+            docker compose logs --tail=100 || true
             '''
         }
     }
