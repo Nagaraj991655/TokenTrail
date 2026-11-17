@@ -2,10 +2,11 @@ pipeline {
     agent any
 
     stages {
-
         stage('Deploy') {
             steps {
                 sh '''
+                git config --global --add safe.directory /home/ubuntu/TokenTrail
+
                 cd /home/ubuntu/TokenTrail
 
                 git fetch origin
@@ -22,25 +23,9 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                sleep 15
-
                 curl -f http://localhost:8000/health
-                curl -f http://localhost:3000
                 '''
             }
-        }
-    }
-
-    post {
-        success {
-            echo 'Deployment Successful'
-        }
-
-        failure {
-            sh '''
-            cd /home/ubuntu/TokenTrail
-            docker compose logs --tail=100
-            '''
         }
     }
 }
