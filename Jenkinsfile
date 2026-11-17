@@ -6,11 +6,12 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                pwd
-                ls -la
+                cd /home/ubuntu/TokenTrail
+
+                git fetch origin
+                git reset --hard origin/main
 
                 docker compose down --remove-orphans || true
-
                 docker compose up -d --build
 
                 docker ps
@@ -23,8 +24,8 @@ pipeline {
                 sh '''
                 sleep 15
 
-                curl -f http://localhost:3000 || true
-                curl -f http://localhost:8000/health || true
+                curl -f http://localhost:8000/health
+                curl -f http://localhost:3000
                 '''
             }
         }
@@ -36,11 +37,9 @@ pipeline {
         }
 
         failure {
-            echo 'Deployment Failed'
-
             sh '''
-            docker ps -a
-            docker compose logs --tail=100 || true
+            cd /home/ubuntu/TokenTrail
+            docker compose logs --tail=100
             '''
         }
     }
