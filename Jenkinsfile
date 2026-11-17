@@ -3,15 +3,26 @@ pipeline {
 
     stages {
 
+        stage('Create Env') {
+            steps {
+                sh '''
+                cat > backend/.env << 'EOF'
+APP_ENV=development
+HOST=0.0.0.0
+PORT=8000
+DATABASE_URL=sqlite+aiosqlite:///./tokentrail.db
+CORS_ORIGINS=http://44.213.112.127:3000
+CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+CLERK_JWKS_URL=https://api.clerk.com/v1/jwks
+EOF
+                '''
+            }
+        }
+
         stage('Deploy') {
             steps {
                 sh '''
-                sudo rsync -av --delete \
-                "$WORKSPACE/" \
-                /home/ubuntu/TokenTrail/
-
-                cd /home/ubuntu/TokenTrail
-
                 docker compose down --remove-orphans || true
 
                 docker compose up -d --build
@@ -27,6 +38,7 @@ pipeline {
                 sleep 20
 
                 curl -f http://localhost:8000/health
+
                 curl -f http://localhost:3000
                 '''
             }
@@ -34,16 +46,9 @@ pipeline {
     }
 
     post {
-        success {
-            echo 'Deployment Successful'
-        }
-
-        failure {
+        always {
             sh '''
-            cd /home/ubuntu/TokenTrail
-
-            docker compose ps || true
-            docker compose logs --tail=100 || true
+            docker ps
             '''
         }
     }
