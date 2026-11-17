@@ -2,32 +2,29 @@ pipeline {
     agent any
 
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
-        stage('Create Env') {
+        stage('Stop Old Containers') {
             steps {
                 sh '''
-                cat > backend/.env << 'EOF'
-APP_ENV=development
-HOST=0.0.0.0
-PORT=8000
-DATABASE_URL=sqlite+aiosqlite:///./tokentrail.db
-CORS_ORIGINS=http://44.213.112.127:3000
-CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
-CLERK_JWKS_URL=https://api.clerk.com/v1/jwks
-EOF
+                    # Stop any existing compose stack under the 'tokentrail' project name
+                    docker compose -p tokentrail down --remove-orphans || true
+
+                    # Force-remove any old manual or mismatched containers holding ports 3000/8000
+                    docker rm -f tokentrail-backend-1 tokentrail-frontend-1 tokentrailcicd-backend-1 tokentrailcicd-frontend-1 2>/dev/null || true
                 '''
             }
         }
 
-        stage('Deploy') {
+        stage('Build & Deploy') {
             steps {
                 sh '''
-                docker compose down --remove-orphans || true
-
-                docker compose up -d --build
-
-                docker ps
+                    # Build fresh images and start containers consistently under 'tokentrail'
+                    docker compose -p tokentrail up -d --build
                 '''
             }
         }
@@ -35,11 +32,14 @@ EOF
         stage('Health Check') {
             steps {
                 sh '''
-                sleep 20
+                    echo "Waiting for services to initialize..."
+                    sleep 10
 
-                curl -f http://localhost:8000/health
+                    # Verify backend (port 8000) and frontend (port 3000) are responding
+                    curl -f http://localhost:8000/docs || (echo "Backend health check failed!" && exit 1)
+                    curl -f http://localhost:3000 || (echo "Frontend health check failed!" && exit 1)
 
-                curl -f http://localhost:3000
+                    echo "All services are up and healthy!"
                 '''
             }
         }
@@ -48,8 +48,16 @@ EOF
     post {
         always {
             sh '''
-            docker ps
+                # Clean up unused dangling images to prevent disk space from filling up
+                docker image prune -f || true
             '''
+        }
+        success {
+            echo 'Deployment completed successfully!'
+        }
+        failure {
+            echo 'Deployment failed. Recent container logs:'
+            sh 'docker compose -p tokentrail logs --tail=50 || true'
         }
     }
 }
